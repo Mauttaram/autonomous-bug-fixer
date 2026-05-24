@@ -1,0 +1,13 @@
+# safe-agentic-deploy — top-level dependencies
+# Install: pip install -r requirements.txt
+
+# RAG feedback loop
+chromadb>=0.5.0              # local vector DB (no API key needed)
+sentence-transformers>=3.0   # offline embeddings — all-MiniLM-L6-v2 (80MB)
+
+# LLM client (root cause inference + OpenHands task building)
+anthropic>=0.28.0
+
+# Webhook server
+flask>=3.0
+gunicorn>=22.0    # production WSGI server

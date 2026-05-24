@@ -1,0 +1,86 @@
+services:
+
+  # ── API SERVICE (Repo A: api-service) ─────────────────────────────────────
+  # Backend REST API — serves product data.
+  # BUG: returns `final_price` field; frontend expects `sale_price`.
+  api-sandbox:
+    build: ./api-service
+    ports:
+      - "8001:8001"
+    environment:
+      - APP_ENV=sandbox
+    volumes:
+      - ./api-service:/app    # agent edits are live-reloaded
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    profiles: [sandbox, prod]
+
+  # ── FRONTEND (Repo B: test-webapp) ─────────────────────────────────────────
+  # Web frontend — calls the API service for product data.
+  # BUG: reads `sale_price` field but API now returns `final_price` → shows $0.00.
+  frontend-sandbox:
+    build: ./test-webapp
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
+      - APP_ENV=sandbox
+      - API_SERVICE_URL=http://api-sandbox:8001   # enables multi-repo mode
+    volumes:
+      - ./test-webapp:/app
+    depends_on:
+      api-sandbox:
+        condition: service_healthy
+    profiles: [sandbox]
+
+  # ── PRODUCTION EQUIVALENTS ─────────────────────────────────────────────────
+  # Promoted only after both repo PRs are merged and tests pass.
+  api-prod:
+    build: ./api-service
+    ports:
+      - "8002:8001"
+    environment:
+      - APP_ENV=production
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    profiles: [prod]
+
+  frontend-prod:
+    build: ./test-webapp
+    ports:
+      - "8080:5000"
+    environment:
+      - FLASK_ENV=production
+      - FLASK_DEBUG=0
+      - APP_ENV=production
+      - API_SERVICE_URL=http://api-prod:8001
+    depends_on:
+      api-prod:
+        condition: service_healthy
+    profiles: [prod]
+
+  # ── INTEGRATION TEST RUNNER ────────────────────────────────────────────────
+  # Runs cross-service tests: spins up both services, then tests end-to-end.
+  # Usage: docker-compose -f docker-compose.multi-repo.yml run --rm integration-test
+  integration-test:
+    image: python:3.12-slim
+    working_dir: /tests
+    volumes:
+      - ./integration-tests:/tests
+    environment:
+      - FRONTEND_URL=http://frontend-sandbox:5000
+      - API_URL=http://api-sandbox:8001
+    depends_on:
+      api-sandbox:
+        condition: service_healthy
+    command: >
+      sh -c "pip install pytest requests -q &&
+             pytest test_integration.py -v --tb=short"
+    profiles: [integration]

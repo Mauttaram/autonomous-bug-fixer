@@ -1,0 +1,95 @@
+# OpenHands configuration for Safe Agentic Deploy — OSS4AI Hackathon
+# Place this file at the root of the project before running the agent.
+# Docs: https://docs.openhands.dev
+
+# ── CORE ──────────────────────────────────────────────────────────────────────
+[core]
+workspace_base        = "./workspace"       # agent clones repos here
+cache_dir             = "/tmp/oh-cache"
+debug                 = false
+max_iterations        = 50                  # stop runaway loops
+max_budget_per_task   = 3.0                 # hard $ cap per Jira ticket
+trajectory_path       = "./trajectories"    # full audit log of every action
+
+# ── LLM ───────────────────────────────────────────────────────────────────────
+[llm]
+model               = "claude-sonnet-4-6"  # primary reasoning model
+api_key             = "${ANTHROPIC_API_KEY}"
+temperature         = 0.0                  # deterministic — code fixes need consistency
+max_output_tokens   = 8192
+caching_prompt      = true                 # cuts cost ~60% via prompt caching
+timeout             = 120
+
+# Cheaper model for mechanical edits (whitespace, renames, formatting)
+[llm.draft_editor]
+model               = "claude-haiku-4-5-20251001"
+temperature         = 0.0
+
+# ── AGENT ─────────────────────────────────────────────────────────────────────
+[agent]
+codeact_enable_browsing    = true    # browse running sandbox app to confirm bug/fix
+codeact_enable_llm_editor  = true    # smarter multi-file edits
+codeact_enable_jupyter     = false   # not needed for this project
+enable_som_visual_browsing = false
+
+# ── SANDBOX ───────────────────────────────────────────────────────────────────
+# Agent runs INSIDE this container — fully isolated from your machine.
+[sandbox]
+base_container_image = "python:3.12-slim"
+runtime              = "docker"
+timeout              = 120
+
+# Mount the project so the agent can read existing code before editing
+[sandbox.volumes]
+"${PWD}/test-webapp"  = { bind = "/workspace/test-webapp",  mode = "rw" }
+"${PWD}/api-service"  = { bind = "/workspace/api-service",  mode = "rw" }
+
+# ── SECURITY ──────────────────────────────────────────────────────────────────
+# confirmation_mode = true → agent pauses before destructive actions
+# (e.g., git push, docker deploy). Human must approve in the CLI.
+[security]
+confirmation_mode  = true
+security_analyzer  = "invariant"    # blocks actions outside defined policy
+
+# ── CONDENSER ─────────────────────────────────────────────────────────────────
+# Controls how the agent manages long conversation history.
+# "llm" condenser summarises old context to stay within token limits.
+[condenser]
+type = "llm"
+
+[condenser.llm]
+model       = "claude-haiku-4-5-20251001"
+temperature = 0.0
+
+# ── RAG FEEDBACK LOOP ─────────────────────────────────────────────────────────
+# Before dispatching a task to the agent, enrich the prompt with past failure
+# context retrieved from the local ChromaDB vector store.
+#
+# Usage (replace the plain --task flag with the enriched version):
+#
+#   python -c "
+#   from feedback.injector import build_enriched_openhands_command
+#   print(build_enriched_openhands_command(
+#       ticket_id    = 'BUG-001',
+#       ticket_title = 'ZeroDivisionError on product detail page',
+#       ticket_body  = open('bugs/BUG-001.md').read(),
+#       repo_url     = 'https://github.com/your-org/test-webapp',
+#   ))" | bash
+#
+# Failure capture (call after a test failure or canary rollback):
+#
+#   python -c "
+#   from feedback.capture import capture_failure
+#   capture_failure(
+#       event_type   = 'test_failure',       # or 'rollback'
+#       ticket_id    = 'BUG-001',
+#       ticket_title = 'ZeroDivisionError on product detail page',
+#       ticket_body  = open('bugs/BUG-001.md').read(),
+#       repo         = 'https://github.com/your-org/test-webapp',
+#       diff         = open('/tmp/agent.diff').read(),
+#       error_output = open('/tmp/pytest.log').read(),
+#   )"
+#
+# Store location: feedback/store/chroma/   (ChromaDB)
+#                 feedback/store/raw/      (raw JSON audit trail)
+# Dependencies:   pip install -r requirements.txt

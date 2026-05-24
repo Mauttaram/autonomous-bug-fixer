@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}{{ product.name }} — TechStore{% endblock %}
+
+{% block content %}
+<nav aria-label="breadcrumb" class="mb-3">
+  <ol class="breadcrumb">
+    <li class="breadcrumb-item"><a href="/">Products</a></li>
+    <li class="breadcrumb-item active">{{ product.name }}</li>
+  </ol>
+</nav>
+
+<div class="row">
+  <div class="col-md-8">
+    <div class="card shadow-sm">
+      <div class="card-body p-4">
+        <div class="d-flex justify-content-between align-items-start">
+          <div>
+            <span class="badge bg-secondary mb-2">{{ product.category }}</span>
+            <h2 class="fw-bold">{{ product.name }}</h2>
+          </div>
+          <span class="badge bg-success fs-6">In Stock: {{ product.stock }}</span>
+        </div>
+
+        <p class="text-muted mt-2">{{ product.description }}</p>
+
+        <hr />
+
+        <div class="pricing-section">
+          <div class="text-muted text-decoration-line-through">
+            Original: ${{ "%.2f"|format(product.price) }}
+          </div>
+          {% if product.discount > 0 %}
+          <div class="d-flex align-items-center gap-3 mt-1">
+            <span class="fs-3 fw-bold text-danger">${{ "%.2f"|format(sale_price) }}</span>
+            <span class="badge bg-danger fs-6">-{{ product.discount }}% OFF</span>
+          </div>
+          {% else %}
+          <span class="fs-3 fw-bold">${{ "%.2f"|format(product.price) }}</span>
+          {% endif %}
+        </div>
+
+        <hr />
+
+        <h5>Customer Reviews</h5>
+        {% if product.reviews %}
+        <div class="d-flex align-items-center gap-2 mb-2">
+          <span class="fs-4 fw-bold">{{ avg_rating }}</span>
+          <div class="stars">
+            {% for i in range(1, 6) %}
+              {% if i <= avg_rating %}
+              <i class="bi bi-star-fill text-warning"></i>
+              {% else %}
+              <i class="bi bi-star text-warning"></i>
+              {% endif %}
+            {% endfor %}
+          </div>
+          <span class="text-muted">({{ product.reviews|length }} reviews)</span>
+        </div>
+        {% else %}
+        <p class="text-muted fst-italic">No reviews yet. Be the first to review this product.</p>
+        {% endif %}
+
+        <button class="btn btn-primary btn-lg mt-3 w-100">
+          <i class="bi bi-cart-plus me-2"></i>Add to Cart
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <div class="card shadow-sm border-info">
+      <div class="card-header bg-info text-white fw-bold">
+        <i class="bi bi-info-circle me-1"></i>Bug Report Context
+      </div>
+      <div class="card-body small">
+        <p><strong>If you see this page without a crash:</strong> the agent has already applied the fix.</p>
+        <p><strong>Expected crash (unfixed):</strong><br/>
+          <code>ZeroDivisionError: division by zero</code><br/>
+          in <code>app.py</code> line ~55
+        </p>
+        <p><strong>Root cause:</strong> Empty <code>reviews</code> list causes division by zero when calculating average rating.</p>
+        <p><strong>Fix:</strong> Return <code>None</code> when reviews list is empty and handle in template.</p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

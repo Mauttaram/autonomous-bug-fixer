@@ -1,0 +1,40 @@
+services:
+
+  # ── SANDBOX ──────────────────────────────────────────────────────────────
+  # Isolated environment where the agent applies and validates the fix.
+  # Run: docker-compose up sandbox
+  # URL: http://localhost:5000
+  sandbox:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=development
+      - FLASK_DEBUG=1
+      - APP_ENV=sandbox
+    volumes:
+      - .:/app          # live-reload: agent edits are immediately reflected
+    profiles: [sandbox]
+
+  # ── PRODUCTION ───────────────────────────────────────────────────────────
+  # Mirrors production. Only promoted after tests pass and PR is merged.
+  # Run: docker-compose up prod
+  # URL: http://localhost:8080
+  prod:
+    build: .
+    ports:
+      - "8080:5000"
+    environment:
+      - FLASK_ENV=production
+      - FLASK_DEBUG=0
+      - APP_ENV=production
+    profiles: [prod]
+
+  # ── TEST RUNNER ──────────────────────────────────────────────────────────
+  # Run tests in isolation: docker-compose run --rm test
+  test:
+    build: .
+    command: pytest tests/ -v --tb=short
+    environment:
+      - APP_ENV=test
+    profiles: [test]
