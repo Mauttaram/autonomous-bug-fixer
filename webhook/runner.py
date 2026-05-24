@@ -31,16 +31,28 @@ def run_openhands_task(
         {"success": True, "pr_url": "..."}
         {"success": False, "event_id": "...", "root_cause": "...", "error_output": "..."}
     """
-    task_escaped = enriched_task.replace("'", "'\"'\"'")
+    workspace = os.path.join(os.getcwd(), "workspace")
+    os.makedirs(workspace, exist_ok=True)
+
+    # Run OpenHands via the locally installed pip package (avoids Docker-in-Docker
+    # issues on macOS). It still uses the host Docker daemon for the sandbox runtime.
+    python = os.path.join(os.path.dirname(os.path.dirname(__file__)),
+                          ".venv", "bin", "python3")
+    if not os.path.exists(python):
+        python = "python3"
+
+    env = {
+        **os.environ,
+        "LLM_API_KEY":    os.environ.get("ANTHROPIC_API_KEY", os.environ.get("LLM_API_KEY", "")),
+        "LLM_MODEL":      "anthropic/claude-sonnet-4-6",
+        "WORKSPACE_BASE": workspace,
+        "GITHUB_TOKEN":   os.environ.get("GITHUB_TOKEN", ""),
+        "LOG_ALL_EVENTS": "true",
+    }
 
     cmd = [
-        "docker", "run", "--rm",
-        "-v", f"{os.getcwd()}:/app",
-        "-e", f"ANTHROPIC_API_KEY={os.environ.get('ANTHROPIC_API_KEY', '')}",
-        "-e", f"GITHUB_TOKEN={os.environ.get('GITHUB_TOKEN', '')}",
-        "ghcr.io/all-hands-ai/openhands:latest",
-        "--config", f"/app/{config_path}",
-        "--task", enriched_task,
+        python, "-m", "openhands.core.main",
+        "-t", enriched_task,
     ]
 
     print(f"[runner] Starting OpenHands for {ticket_id}...")
@@ -55,6 +67,7 @@ def run_openhands_task(
             capture_output=True,
             text=True,
             timeout=timeout,
+            env=env,
         )
         elapsed = round(time.time() - start, 1)
         output  = result.stdout + result.stderr
