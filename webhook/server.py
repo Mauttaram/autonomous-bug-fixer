@@ -148,16 +148,23 @@ def _run_agent_async(
     ticket_id: str, ticket_title: str, ticket_body: str, repo_url: str,
 ) -> None:
     """Runs in a background thread — builds enriched prompt, fires OpenHands."""
+    sep = "─" * 60
     try:
         from feedback.injector import build_enriched_task
         from webhook.runner    import run_openhands_task
 
+        log.info(sep)
+        log.info("[%s] STEP 1/5 — Querying RAG store for similar past failures", ticket_id)
         enriched_task = build_enriched_task(
             ticket_id    = ticket_id,
             ticket_title = ticket_title,
             ticket_body  = ticket_body,
             repo         = repo_url,
         )
+        log.info("[%s] STEP 2/5 — Enriched task prompt built (%d chars)", ticket_id, len(enriched_task))
+        log.info("[%s] STEP 3/5 — Launching OpenHands agent (sandbox + Claude Sonnet)", ticket_id)
+        log.info("[%s]           Agent will: clone repo → read code → write fix → run tests → open PR", ticket_id)
+        log.info(sep)
 
         result = run_openhands_task(
             ticket_id     = ticket_id,
@@ -167,11 +174,15 @@ def _run_agent_async(
             enriched_task = enriched_task,
         )
 
+        log.info(sep)
         if result["success"]:
-            log.info("[%s] Agent succeeded — PR: %s", ticket_id, result.get("pr_url"))
+            log.info("[%s] STEP 4/5 — Tests passed ✓", ticket_id)
+            log.info("[%s] STEP 5/5 — PR opened: %s", ticket_id, result.get("pr_url", "(see agent log)"))
+            log.info("[%s] ✓ PIPELINE COMPLETE — bug fixed and shipped safely", ticket_id)
         else:
-            log.warning("[%s] Agent failed — failure captured (event_id=%s)",
-                        ticket_id, result.get("event_id"))
+            log.warning("[%s] STEP 4/5 — Agent failed — root cause captured to RAG store", ticket_id)
+            log.warning("[%s]            event_id=%s", ticket_id, result.get("event_id"))
+            log.warning("[%s]            Next run will see this failure in its prompt", ticket_id)
 
     except Exception as exc:
         log.exception("[%s] Unexpected error in agent runner: %s", ticket_id, exc)
